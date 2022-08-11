@@ -17,8 +17,6 @@ import android.graphics.Color
 import android.graphics.drawable.AnimatedVectorDrawable
 import android.graphics.drawable.ColorDrawable
 import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -59,6 +57,10 @@ import androidx.core.view.isInvisible
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
 import androidx.preference.PreferenceManager
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
 import com.google.android.material.chip.Chip
 import com.google.android.material.slider.Slider
 import kotlinx.coroutines.delay
@@ -99,7 +101,21 @@ class MainActivity : AppCompatActivity() {
     private val zoomLevel by lazy { findViewById<Slider>(R.id.zoomLevel) }
 
     private val keyguardManager by lazy { getSystemService(KeyguardManager::class.java) }
-    private val locationManager by lazy { getSystemService(LocationManager::class.java) }
+
+    private val fusedLocationClient by lazy {
+        LocationServices.getFusedLocationProviderClient(this)
+    }
+
+    private var location: Location? = null
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(locationResult: LocationResult) {
+            for (loc in locationResult.locations) {
+                if (location == null || location!!.accuracy >= loc.accuracy) {
+                    location = loc
+                }
+            }
+        }
+    }
 
     private lateinit var cameraProvider: ProcessCameraProvider
     private lateinit var extensionsManager: ExtensionsManager
@@ -144,36 +160,6 @@ class MainActivity : AppCompatActivity() {
                     viewFinderFocus.visibility = View.GONE
                 }
             }
-        }
-    }
-
-    private var location: Location? = null
-    private val locationListener = object : LocationListener {
-        override fun onLocationChanged(it: Location) {
-            if (location == null || location!!.accuracy >= it.accuracy) {
-                location = it
-            }
-        }
-
-        @SuppressLint("MissingPermission")
-        fun register() {
-            // Reset cached location
-            location = null
-
-            if (allLocationPermissionsGranted()) {
-                // Request location updates
-                locationManager.allProviders.forEach {
-                    locationManager.requestLocationUpdates(it, 1000, 0f, this)
-                }
-            }
-        }
-
-        fun unregister() {
-            // Remove updates
-            locationManager.removeUpdates(this)
-
-            // Reset cached location
-            location = null
         }
     }
 
@@ -300,6 +286,18 @@ class MainActivity : AppCompatActivity() {
         cameraExecutor = Executors.newSingleThreadExecutor()
     }
 
+    @SuppressLint("MissingPermission")
+    fun startLocationUpdates() {
+        if (allLocationPermissionsGranted()) {
+            fusedLocationClient.requestLocationUpdates(
+                LocationRequest.create(),
+                locationCallback,
+                Looper.getMainLooper()
+            )
+        }
+
+    }
+
     @androidx.camera.camera2.interop.ExperimentalCamera2Interop
     override fun onResume() {
         super.onResume()
@@ -309,15 +307,20 @@ class MainActivity : AppCompatActivity() {
         updateGalleryButton(sharedPreferences.lastSavedUri, !keyguardManager.isKeyguardLocked)
 
         // Register location updates
-        locationListener.register()
+        startLocationUpdates()
 
         // Re-bind the use cases
         bindCameraUseCases()
     }
 
+    private fun stopLocationUpdates() {
+        location = null
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+    }
+
     override fun onPause() {
         // Remove location and location updates
-        locationListener.unregister()
+        stopLocationUpdates()
 
         // Reset tookSomething state
         tookSomething = false

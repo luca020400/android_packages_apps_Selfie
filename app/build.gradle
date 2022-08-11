@@ -58,4 +58,7 @@ dependencies {
 
     // ZXing
     implementation 'com.google.zxing:core:3.5.0'
+
+    // Fused location
+    implementation 'com.google.android.gms:play-services-location:20.0.0'
 }
