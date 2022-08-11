@@ -46,6 +46,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.CameraController
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
+import androidx.camera.view.video.Metadata
 import androidx.camera.view.video.OnVideoSavedCallback
 import androidx.camera.view.video.OutputFileResults
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -357,8 +358,11 @@ class MainActivity : AppCompatActivity() {
         shutterButton.isEnabled = false
 
         // Create output options object which contains file + metadata
-        val outputOptions = StorageUtils.getPhotoMediaStoreOutputOptions(contentResolver)
-        outputOptions.metadata.location = location
+        val metadata = ImageCapture.Metadata()
+        location?.let {
+            metadata.location = it
+        }
+        val outputOptions = StorageUtils.getPhotoMediaStoreOutputOptions(contentResolver, metadata)
 
         // Set up image capture listener, which is triggered after photo has
         // been taken
@@ -403,7 +407,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Create output options object which contains file + metadata
-        val outputOptions = StorageUtils.getVideoMediaStoreOutputOptions(contentResolver)
+        val builder = Metadata.builder()
+        location?.let {
+            builder.setLocation(it)
+        }
+        val outputOptions =
+            StorageUtils.getVideoMediaStoreOutputOptions(contentResolver, builder.build())
 
         // Start recording
         cameraController.startRecording(
